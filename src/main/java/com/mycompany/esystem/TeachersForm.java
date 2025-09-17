@@ -363,21 +363,27 @@ public class TeachersForm extends javax.swing.JFrame {
             String createUserSQL = "CREATE USER IF NOT EXISTS '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
             stmt.execute(createUserSQL);
             
-            // Grant SELECT, INSERT, UPDATE privileges on relevant tables (no DELETE)
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Students` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Teachers` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Subjects` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Enroll` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Grades` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Assign` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`Invoice` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT, INSERT, UPDATE ON `1st_SY2025_2026`.`TransactionCharges` TO '" + username + "'@'%'");
+            // Grant SELECT, INSERT, UPDATE privileges on relevant tables (no DELETE) in the current database only
+            String currentDatabase = "1st_SY2025_2026"; // This will be the database where the teacher is being registered
+            try {
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Invoice` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`TransactionCharges` TO '" + username + "'@'%'");
+            } catch (Exception e) {
+                System.out.println("Warning: Could not grant privileges on database " + currentDatabase + ": " + e.getMessage());
+            }
             
             // Flush privileges
             stmt.execute("FLUSH PRIVILEGES");
             
             System.out.println("Created database user for teacher: " + username);
             System.out.println("Password: " + password);
+            System.out.println("Granted access to database: " + currentDatabase);
             
             stmt.close();
             conn.close();

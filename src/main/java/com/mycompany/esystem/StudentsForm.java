@@ -387,26 +387,32 @@ public class StudentsForm extends javax.swing.JFrame {
             Statement stmt = conn.createStatement();
             
             // Create username (studid + stud name) and password (AdDu + stud name)
-            String username = studentId + studentName.toLowerCase().replaceAll("\\s+", "");
+            String username = studentId + studentName.toLowerCase().replaceAll("\\\\s+", "");
             String password = "AdDu" + studentName;
             
             // Create the user
             String createUserSQL = "CREATE USER IF NOT EXISTS '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
             stmt.execute(createUserSQL);
             
-            // Grant SELECT privileges on relevant tables
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Students` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Subjects` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Teachers` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Enroll` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Grades` TO '" + username + "'@'%'");
-            stmt.execute("GRANT SELECT ON `1st_SY2025_2026`.`Assign` TO '" + username + "'@'%'");
+            // Grant SELECT privileges on relevant tables in the current database only
+            String currentDatabase = "1st_SY2025_2026"; // This will be the database where the student is being registered
+            try {
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%'");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%'");
+            } catch (Exception e) {
+                System.out.println("Warning: Could not grant privileges on database " + currentDatabase + ": " + e.getMessage());
+            }
             
             // Flush privileges
             stmt.execute("FLUSH PRIVILEGES");
             
             System.out.println("Created database user for student: " + username);
             System.out.println("Password: " + password);
+            System.out.println("Granted access to database: " + currentDatabase);
             
             stmt.close();
             conn.close();
