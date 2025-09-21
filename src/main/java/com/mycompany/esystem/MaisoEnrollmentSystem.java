@@ -20,7 +20,6 @@ public class MaisoEnrollmentSystem {
     public static SubjectsForm subjectsFormInstance;
 
     public static void main(String[] args) {
-        // DBConnect(); // We will connect after the user logs in
         Login loginForm = new Login();
         loginForm.setVisible(true);
         //StudentsForm student = new StudentsForm();

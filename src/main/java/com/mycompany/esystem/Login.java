@@ -174,22 +174,61 @@ public class Login extends javax.swing.JFrame {
                 this.loggedInUsername = mysqlUsername;
                 this.loggedInPassword = mysqlPassword;
 
-                try (Statement stmt = testConn.createStatement();
-                     ResultSet rs = stmt.executeQuery("SHOW DATABASES")) {
-                    
-                    jComboBox1.removeAllItems();
-                    while (rs.next()) {
-                        String dbName = rs.getString(1);
-                        if (!dbName.equalsIgnoreCase("information_schema") && 
-                            !dbName.equalsIgnoreCase("mysql") &&
-                            !dbName.equalsIgnoreCase("performance_schema") &&
-                            !dbName.equalsIgnoreCase("sys")) {
-                            jComboBox1.addItem(dbName);
+                // Populate the School Year combo box with databases the user has access to
+                jComboBox1.removeAllItems();
+                
+                // Use ArrayList to store accessible databases
+                java.util.ArrayList<String> accessibleDatabases = new java.util.ArrayList<>();
+                
+                try (Statement stmt = testConn.createStatement()) {
+                    if ("root".equalsIgnoreCase(mysqlUsername)) {
+                        // Root user: show all databases except system DBs
+                        try (ResultSet rs = stmt.executeQuery("SHOW DATABASES")) {
+                            while (rs.next()) {
+                                String dbName = rs.getString(1);
+                                if (!dbName.equalsIgnoreCase("information_schema") &&
+                                    !dbName.equalsIgnoreCase("mysql") &&
+                                    !dbName.equalsIgnoreCase("performance_schema") &&
+                                    !dbName.equalsIgnoreCase("sys")) {
+                                    accessibleDatabases.add(dbName);
+                                }
+                            }
+                        }
+                    } else {
+                        // Other users: infer databases from SHOW GRANTS
+                        try (ResultSet rs = stmt.executeQuery("SHOW GRANTS FOR CURRENT_USER()")) {
+                            while (rs.next()) {
+                                String grant = rs.getString(1);
+                                // Look for patterns like `database`.`table` or `database`.*
+                                java.util.regex.Pattern dbPattern = java.util.regex.Pattern.compile("`([^`]+)`\\s*\\.");
+                                java.util.regex.Matcher matcher = dbPattern.matcher(grant);
+                                while (matcher.find()) {
+                                    String dbName = matcher.group(1);
+                                    if (!dbName.equalsIgnoreCase("information_schema") &&
+                                        !dbName.equalsIgnoreCase("mysql") &&
+                                        !dbName.equalsIgnoreCase("performance_schema") &&
+                                        !dbName.equalsIgnoreCase("sys")) {
+                                        if (!accessibleDatabases.contains(dbName)) {
+                                            accessibleDatabases.add(dbName);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                    jComboBox1.setEnabled(true);
-                    submit.setEnabled(true);
                 }
+                
+                // Sort for better UX and add to combo box
+                java.util.Collections.sort(accessibleDatabases);
+                for (String dbName : accessibleDatabases) {
+                    jComboBox1.addItem(dbName);
+                }
+                if (accessibleDatabases.isEmpty()) {
+                    jComboBox1.addItem("No accessible databases");
+                }
+
+                jComboBox1.setEnabled(true);
+                submit.setEnabled(true);
             } catch (SQLException ex) {
                 String errorMsg = ex.getMessage();
                 if (errorMsg.contains("Access denied")) {
@@ -203,10 +242,12 @@ public class Login extends javax.swing.JFrame {
                 }
             }
         } catch (Exception ex) {
-            System.out.println("Error: " + ex.getMessage());
+  
+          System.out.println("Error: " + ex.getMessage());
         }
     }//GEN-LAST:event_loginActionPerformed
-
+ 
+ 
     private void submitActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_submitActionPerformed
         // Get the selected database name from the combo box
         String selectedDatabase = (String) jComboBox1.getSelectedItem();

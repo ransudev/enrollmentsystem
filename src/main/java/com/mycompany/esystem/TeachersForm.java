@@ -343,11 +343,7 @@ public class TeachersForm extends javax.swing.JFrame {
         int teacherId = a.SaveRecord(Tname.getText(), Tadd.getText(), Tcontact.getText(), Tdept.getText());
         showrec();
         
-        // Create database user for the teacher
-        createTeacherUser(teacherId, Tname.getText());
-    }//GEN-LAST:event_saveActionPerformed
-
-    private void createTeacherUser(int teacherId, String teacherName) {
+        // Create database user for the teacher (inline, compatible with older MySQL)
         try {
             // Connect to MySQL as root to create user
             String host = "192.168.64.3";
@@ -356,24 +352,33 @@ public class TeachersForm extends javax.swing.JFrame {
             Statement stmt = conn.createStatement();
             
             // Create username (teacher id + teacher name) and password (AdDu + teacher name)
-            String username = teacherId + teacherName.toLowerCase().replaceAll("\\s+", "");
-            String password = "AdDu" + teacherName;
+            String username = teacherId + Tname.getText().toLowerCase().replaceAll("\\s+", "");
+            String password = "AdDu" + Tname.getText();
             
-            // Create the user
-            String createUserSQL = "CREATE USER IF NOT EXISTS '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
-            stmt.execute(createUserSQL);
-            
-            // Grant SELECT, INSERT, UPDATE privileges on relevant tables (no DELETE) in the current database only
-            String currentDatabase = "1st_SY2025_2026"; // This will be the database where the teacher is being registered
+            // Create the user (handle 'user exists' by ignoring error 1396)
             try {
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Invoice` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`TransactionCharges` TO '" + username + "'@'%'");
+                String createUserSQL = "CREATE USER '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
+                stmt.execute(createUserSQL);
+            } catch (SQLException e) {
+                // 1396 = Operation CREATE USER failed (user exists)
+                if (e.getErrorCode() == 1396 || String.valueOf(e.getMessage()).toLowerCase().contains("exists")) {
+                    System.out.println("User already exists: " + username + ", proceeding to grant privileges.");
+                } else {
+                    throw e;
+                }
+            }
+            
+            // Grant SELECT, INSERT, UPDATE privileges on relevant tables (no DELETE) in the currently selected database
+            String currentDatabase = MaisoEnrollmentSystem.db; // Use the DB chosen in Login
+            try {
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`Invoice` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT, INSERT, UPDATE ON `" + currentDatabase + "`.`TransactionCharges` TO '" + username + "'@'%' ");
             } catch (Exception e) {
                 System.out.println("Warning: Could not grant privileges on database " + currentDatabase + ": " + e.getMessage());
             }
@@ -391,9 +396,9 @@ public class TeachersForm extends javax.swing.JFrame {
             System.out.println("Failed to create database user for teacher: " + ex.getMessage());
             ex.printStackTrace();
         }
-    }
+    }//GEN-LAST:event_saveActionPerformed
 
-    private void TeacherTableMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_TeacherTableMouseClicked
+ private void TeacherTableMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_TeacherTableMouseClicked
         DefaultTableModel teachtable = (DefaultTableModel) TeacherTable.getModel();
         int selectedRow = TeacherTable.getSelectedRow();
 
@@ -417,8 +422,45 @@ public class TeachersForm extends javax.swing.JFrame {
     }//GEN-LAST:event_formWindowOpened
 
     private void deleteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteActionPerformed
+        int teacherId = Integer.valueOf(Tid.getText());
+        String teacherName = Tname.getText();
+        
         Teacher b = new Teacher();
-        b.DeleteRecord(Integer.valueOf(Tid.getText()));
+        b.DeleteRecord(teacherId);
+        
+        // Drop the corresponding database user (inline, compatible with older MySQL)
+        try {
+            // Connect to MySQL as root to drop user
+            String host = "192.168.64.3";
+            String url = "jdbc:mysql://" + host + ":3306/?zeroDateTimeBehavior=CONVERT_TO_NULL&connectTimeout=5000";
+            Connection conn = DriverManager.getConnection(url, "root", "maiso");
+            Statement stmt = conn.createStatement();
+            
+            // Create username (teacher id + teacher name) - same format as when creating
+            String username = teacherId + teacherName.toLowerCase().replaceAll("\\s+", "");
+            
+            // Drop the user (ignore 'user does not exist' error 1396)
+            try {
+                String dropUserSQL = "DROP USER '" + username + "'@'%'";
+                stmt.execute(dropUserSQL);
+            } catch (SQLException e) {
+                // 1396 = Operation DROP USER failed (user does not exist)
+                if (e.getErrorCode() == 1396 || String.valueOf(e.getMessage()).toLowerCase().contains("does not exist")) {
+                    System.out.println("User did not exist: " + username + ", ignoring.");
+                } else {
+                    throw e;
+                }
+            }
+            
+            System.out.println("Dropped database user for teacher: " + username);
+            
+            stmt.close();
+            conn.close();
+        } catch (Exception ex) {
+            System.out.println("Failed to drop database user for teacher: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+        
         showrec();
         Tid.setText("");
         Tname.setText("");
@@ -636,6 +678,7 @@ public class TeachersForm extends javax.swing.JFrame {
             System.out.println("showAssignedRec FAILED: " + ex);
         }
     }
+    
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTextField Tadd;

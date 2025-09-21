@@ -375,10 +375,7 @@ public class StudentsForm extends javax.swing.JFrame {
         int studentId = a.SaveRecord(Name.getText(), Address.getText(), Contact.getText(), Gender.getText(), Yrlvl.getText());
         showrec();
         
-        createStudentUser(studentId, Name.getText());
-    }//GEN-LAST:event_saveActionPerformed
-
-    private void createStudentUser(int studentId, String studentName) {
+        // Create database user for the new student
         try {
             // Connect to MySQL as root to create user
             String host = "192.168.64.3";
@@ -387,22 +384,31 @@ public class StudentsForm extends javax.swing.JFrame {
             Statement stmt = conn.createStatement();
             
             // Create username (studid + stud name) and password (AdDu + stud name)
-            String username = studentId + studentName.toLowerCase().replaceAll("\\\\s+", "");
-            String password = "AdDu" + studentName;
+            String username = studentId + Name.getText().toLowerCase().replaceAll("\\s+", "");
+            String password = "AdDu" + Name.getText();
             
-            // Create the user
-            String createUserSQL = "CREATE USER IF NOT EXISTS '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
-            stmt.execute(createUserSQL);
-            
-            // Grant SELECT privileges on relevant tables in the current database only
-            String currentDatabase = "1st_SY2025_2026"; // This will be the database where the student is being registered
+            // Create the user (compatible with older MySQL: handle 'user exists' by ignoring error 1396)
             try {
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%'");
-                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%'");
+                String createUserSQL = "CREATE USER '" + username + "'@'%' IDENTIFIED BY '" + password + "'";
+                stmt.execute(createUserSQL);
+            } catch (java.sql.SQLException e) {
+                // 1396 = Operation CREATE USER failed (user exists) on older MySQL
+                if (e.getErrorCode() == 1396 || String.valueOf(e.getMessage()).toLowerCase().contains("exists")) {
+                    System.out.println("User already exists: " + username + ", proceeding to grant privileges.");
+                } else {
+                    throw e;
+                }
+            }
+            
+            // Grant SELECT privileges on relevant tables in the currently selected database
+            String currentDatabase = MaisoEnrollmentSystem.db; // Use the DB chosen in Login
+            try {
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Students` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Subjects` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Teachers` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Enroll` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Grades` TO '" + username + "'@'%' ");
+                stmt.execute("GRANT SELECT ON `" + currentDatabase + "`.`Assign` TO '" + username + "'@'%' ");
             } catch (Exception e) {
                 System.out.println("Warning: Could not grant privileges on database " + currentDatabase + ": " + e.getMessage());
             }
@@ -420,11 +426,50 @@ public class StudentsForm extends javax.swing.JFrame {
             System.out.println("Failed to create database user for student: " + ex.getMessage());
             ex.printStackTrace();
         }
-    }
+    }//GEN-LAST:event_saveActionPerformed
+    
+    
 
     private void DeleteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_DeleteActionPerformed
+        int studentId = Integer.valueOf(Studid.getText());
+        String studentName = Name.getText();
+        
         Students b = new Students();
-        b.DeleteRecord(Integer.valueOf(Studid.getText()));
+        b.DeleteRecord(studentId);
+        
+        // Drop the corresponding database user
+        try {
+            // Connect to MySQL as root to drop user
+            String host = "192.168.64.3";
+            String url = "jdbc:mysql://" + host + ":3306/?zeroDateTimeBehavior=CONVERT_TO_NULL&connectTimeout=5000";
+            Connection conn = DriverManager.getConnection(url, "root", "maiso");
+            Statement stmt = conn.createStatement();
+            
+            // Create username (studid + stud name) - same format as when creating
+            String username = studentId + studentName.toLowerCase().replaceAll("\\s+", "");
+            
+            // Drop the user (compatible with older MySQL: ignore 'user does not exist' error 1396)
+            try {
+                String dropUserSQL = "DROP USER '" + username + "'@'%'";
+                stmt.execute(dropUserSQL);
+            } catch (java.sql.SQLException e) {
+                // 1396 = Operation DROP USER failed (user does not exist)
+                if (e.getErrorCode() == 1396 || String.valueOf(e.getMessage()).toLowerCase().contains("does not exist")) {
+                    System.out.println("User did not exist: " + username + ", ignoring.");
+                } else {
+                    throw e;
+                }
+            }
+            
+            System.out.println("Dropped database user for student: " + username);
+            
+            stmt.close();
+            conn.close();
+        } catch (Exception ex) {
+            System.out.println("Failed to drop database user for student: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+        
         showrec();
         Studid.setText("");
         Name.setText("");
